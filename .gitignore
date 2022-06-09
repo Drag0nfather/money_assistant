@@ -129,3 +129,6 @@ dmypy.json
 .pyre/
 /api/migrations/
 /users/migrations/
+
+
+.idea

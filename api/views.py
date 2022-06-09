@@ -3,7 +3,7 @@ from rest_framework import viewsets, status
 
 from users.models import CustomUser
 from .models import Category, SpendItem
-from .serializers import CategorySerializer, SpendItemSerializer
+from .serializers import CategorySerializer, SpendItemSerializer, MonthCategorySerializer
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -48,6 +48,15 @@ class CategoryViewSet(viewsets.ModelViewSet):
                 data={'Добавлена категория': data['category_name']},
                 status=status.HTTP_200_OK
             )
+
+    def show_month_category_balance(self, request):
+        data = request.data
+        user_id = self.request.user.id
+        user_object = CustomUser.objects.get(id=user_id)
+        # TODO при попытке сделать .get(category_name) вылетает ошибка сериализотора, проверить
+        category_balance = Category.objects.get(user=user_object)
+        serializer = MonthCategorySerializer(category_balance)
+        return Response(serializer.data)
 
 
 class SpendItemViewSet(viewsets.ModelViewSet):

@@ -8,6 +8,13 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
 
 
+class MonthCategorySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        fields = ('id', 'limit')
+        model = Category
+
+
 class SpendItemSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
 
