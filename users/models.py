@@ -22,6 +22,7 @@ class CustomUser(AbstractUser):
     money = models.IntegerField(
         null=True,
     )
+    payment_date = models.DateField()
 
     def __str__(self):
         return self.username

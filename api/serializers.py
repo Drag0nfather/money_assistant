@@ -1,23 +1,15 @@
 from rest_framework import serializers
-from .models import Category, UserCategory, SpendItem
+from .models import Category, SpendItem
 
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
-        fields = ('id', 'category_name', 'limit')
+        fields = ('id', 'category_name', 'limit', 'user')
         model = Category
 
 
-class UserCategorySerializer(serializers.ModelSerializer):
-    category = CategorySerializer(read_only=True)
-
-    class Meta:
-        fields = ('id', 'category', 'user')
-        model = UserCategory
-
-
 class SpendItemSerializer(serializers.ModelSerializer):
-    category = UserCategorySerializer(read_only=True)
+    category = CategorySerializer(read_only=True)
 
     class Meta:
         fields = ('id', 'amount', 'category')

@@ -1,8 +1,6 @@
 from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin
 
-from .models import Category, UserCategory, SpendItem
+from .models import Category, SpendItem
 
 admin.site.register(Category)
-admin.site.register(UserCategory)
 admin.site.register(SpendItem)
