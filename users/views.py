@@ -11,7 +11,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def set_limit(self, request):
         data = request.data
-        user_id = request.auth.payload['user_id']
+        user_id = self.request.user.id
         CustomUser.objects.filter(id=user_id).update(money=data['limit'])
         return Response(data={'money update to': data['limit']}, status=status.HTTP_200_OK)
 
@@ -19,3 +19,9 @@ class UserViewSet(viewsets.ModelViewSet):
         query = CustomUser.objects.get(id=self.request.user.id)
         serializer = UsersShowSerializer(query)
         return Response(serializer.data)
+
+    def set_payment_date(self, request):
+        data = request.data
+        user_id = self.request.user.id
+        CustomUser.objects.filter(id=user_id).update(payment_date=data['payment_date'])
+        return Response(data={'payment date changes': data['payment_date']}, status=status.HTTP_200_OK)

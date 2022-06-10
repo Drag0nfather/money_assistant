@@ -12,4 +12,5 @@ urlpatterns = [
     path('', include(router.urls)),
     path('setlimit/', UserViewSet.as_view({'post': 'set_limit'})),
     path('me/', UserViewSet.as_view({'get': 'me'})),
+    path('setpaymentdate/', UserViewSet.as_view({'post': 'set_payment_date'}))
 ]
