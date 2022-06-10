@@ -51,6 +51,14 @@ class CategoryViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_200_OK
             )
 
+    def delete_category(self, request):
+        data = request.data
+        user_id = self.request.user.id
+        user_categories = Category.objects.filter(user=user_id)
+        category = user_categories.get(category_name=data['category_name'])
+        category.delete()
+        return Response({'Удалена категория': category.category_name}, status=status.HTTP_200_OK)
+
     def show_month_category_balance(self, request):
         data = request.data
         user_id = self.request.user.id
@@ -94,3 +102,34 @@ class CategoryViewSet(viewsets.ModelViewSet):
 class SpendItemViewSet(viewsets.ModelViewSet):
     queryset = SpendItem.objects.all()
     serializer_class = SpendItemSerializer
+
+    def add_spend_item(self, request):
+        data = request.data
+        user_id = self.request.user.id
+        user_object = CustomUser.objects.get(id=user_id)
+        category1 = Category.objects.filter(user=user_object).get(category_name=data['category'])
+        sum_spend = category1.fact_spend + data['cost']
+        category2 = Category.objects.filter(user=user_object).filter(category_name=data['category'])
+        category2.update(fact_spend=sum_spend)
+        SpendItem.objects.create(
+            amount=data['cost'],
+            category=category1
+        )
+        cost = data['cost']
+        return Response({f'Трата в категории {category1.category_name}': f'{cost} р.'})
+
+    def show_spend_items(self, request):
+        data = request.data
+        user_id = self.request.user.id
+        user_object = CustomUser.objects.get(id=user_id)
+        if data.get('category'):
+            spend_items = SpendItem.objects.filter(
+                category__user=user_object).filter(
+                category=data['category']
+            )
+            serializer = SpendItemSerializer(spend_items, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            spend_items = SpendItem.objects.filter(category__user=user_object)
+            serializer = SpendItemSerializer(spend_items, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
