@@ -5,7 +5,7 @@ from rest_framework import viewsets, status
 
 from users.models import CustomUser
 from .models import Category, SpendItem
-from .serializers import CategorySerializer, SpendItemSerializer, MonthCategorySerializer
+from .serializers import CategorySerializer, SpendItemSerializer, DayAndMonthCategorySerializer
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -56,16 +56,19 @@ class CategoryViewSet(viewsets.ModelViewSet):
         user_id = self.request.user.id
         user_object = CustomUser.objects.get(id=user_id)
         user_categories = Category.objects.filter(user=user_object)
-        single_category = user_categories.get(category_name=data['category_name'])
-        serializer = MonthCategorySerializer(single_category)
-        return Response(serializer.data)
+        if data.get('category_name'):
+            single_category = user_categories.get(category_name=data['category_name'])
+            serializer = DayAndMonthCategorySerializer(single_category)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            serializer = DayAndMonthCategorySerializer(user_categories, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
     def show_day_category_balance(self, request):
         data = request.data
         user_id = self.request.user.id
         user_object = CustomUser.objects.get(id=user_id)
         user_categories = Category.objects.filter(user=user_object)
-        single_category = user_categories.get(category_name=data['category_name'])
         today = datetime.now()
         user_payment_day = user_object.payment_date
         user_payment_day_in_datetime = datetime(
@@ -73,11 +76,19 @@ class CategoryViewSet(viewsets.ModelViewSet):
             month=user_payment_day.month,
             day=user_payment_day.day
         )
-        days_delta = (user_payment_day_in_datetime-today).days
-        day_balance = single_category.limit / days_delta
-        single_category.limit = day_balance
-        serializer = MonthCategorySerializer(single_category)
-        return Response(serializer.data)
+        days_delta = (user_payment_day_in_datetime - today).days
+        if data.get('category_name'):
+            single_category = user_categories.get(category_name=data['category_name'])
+            day_balance = single_category.limit / days_delta
+            single_category.limit = day_balance
+            serializer = DayAndMonthCategorySerializer(single_category)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            for category in user_categories:
+                day_balance = category.limit / days_delta
+                category.limit = day_balance
+            serializer = DayAndMonthCategorySerializer(user_categories, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class SpendItemViewSet(viewsets.ModelViewSet):

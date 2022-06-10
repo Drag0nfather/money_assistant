@@ -8,7 +8,7 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
 
 
-class MonthCategorySerializer(serializers.ModelSerializer):
+class DayAndMonthCategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         fields = ('id', 'limit')
