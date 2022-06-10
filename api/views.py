@@ -1,3 +1,5 @@
+from datetime import date, datetime
+
 from rest_framework.response import Response
 from rest_framework import viewsets, status
 
@@ -53,9 +55,28 @@ class CategoryViewSet(viewsets.ModelViewSet):
         data = request.data
         user_id = self.request.user.id
         user_object = CustomUser.objects.get(id=user_id)
-        # TODO при попытке сделать .get(category_name) вылетает ошибка сериализотора, проверить
-        category_balance = Category.objects.get(user=user_object)
-        serializer = MonthCategorySerializer(category_balance)
+        user_categories = Category.objects.filter(user=user_object)
+        single_category = user_categories.get(category_name=data['category_name'])
+        serializer = MonthCategorySerializer(single_category)
+        return Response(serializer.data)
+
+    def show_day_category_balance(self, request):
+        data = request.data
+        user_id = self.request.user.id
+        user_object = CustomUser.objects.get(id=user_id)
+        user_categories = Category.objects.filter(user=user_object)
+        single_category = user_categories.get(category_name=data['category_name'])
+        today = datetime.now()
+        user_payment_day = user_object.payment_date
+        user_payment_day_in_datetime = datetime(
+            year=user_payment_day.year,
+            month=user_payment_day.month,
+            day=user_payment_day.day
+        )
+        days_delta = (user_payment_day_in_datetime-today).days
+        day_balance = single_category.limit / days_delta
+        single_category.limit = day_balance
+        serializer = MonthCategorySerializer(single_category)
         return Response(serializer.data)
 
 

@@ -11,5 +11,7 @@ router.register('spenditem', SpendItemViewSet)
 urlpatterns = [
     path('', include(router.urls)),
     path('addcategory/', CategoryViewSet.as_view({'post': 'add_category'})),
-    path('showmonth/', CategoryViewSet.as_view({'post': 'show_month_category_balance'}))
+    path('showmonth/', CategoryViewSet.as_view({'post': 'show_month_category_balance'})),
+    path('showday/', CategoryViewSet.as_view({'post': 'show_day_category_balance'})),
+
 ]
