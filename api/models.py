@@ -11,6 +11,10 @@ class Category(models.Model):
         null=False,
         blank=False,
     )
+    fact_spend = models.IntegerField(
+        null=True,
+        blank=True,
+    )
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='Пользователь')
 
     def __str__(self):
