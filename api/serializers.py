@@ -11,12 +11,19 @@ class CategorySerializer(serializers.ModelSerializer):
 class DayAndMonthCategorySerializer(serializers.ModelSerializer):
 
     class Meta:
-        fields = ('id', 'limit')
+        fields = ('id', 'category_name', 'limit', 'fact_spend')
+        model = Category
+
+
+class CategoryInSpendItemSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        fields = ('category_name',)
         model = Category
 
 
 class SpendItemSerializer(serializers.ModelSerializer):
-    category = CategorySerializer(read_only=True)
+    category = CategoryInSpendItemSerializer(read_only=True)
 
     class Meta:
         fields = ('id', 'amount', 'category')
