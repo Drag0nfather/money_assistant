@@ -16,4 +16,6 @@ urlpatterns = [
     path('showday/', CategoryViewSet.as_view({'post': 'show_day_category_balance'})),
     path('addspenditem/', SpendItemViewSet.as_view({'post': 'add_spend_item'})),
     path('showspenditems/', SpendItemViewSet.as_view({'post': 'show_spend_items'})),
+    path('deletespenditem/', SpendItemViewSet.as_view({'delete': 'delete_spend_item'})),
+
 ]

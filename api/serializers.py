@@ -8,23 +8,21 @@ class CategorySerializer(serializers.ModelSerializer):
         model = Category
 
 
-class DayAndMonthCategorySerializer(serializers.ModelSerializer):
+class MonthCategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         fields = ('id', 'category_name', 'limit', 'fact_spend')
         model = Category
 
-
-class CategoryInSpendItemSerializer(serializers.ModelSerializer):
+class DayCategorySerializer(serializers.ModelSerializer):
 
     class Meta:
-        fields = ('category_name',)
+        fields = ('id', 'category_name', 'limit')
         model = Category
 
 
 class SpendItemSerializer(serializers.ModelSerializer):
-    category = CategoryInSpendItemSerializer(read_only=True)
-
+    category = serializers.CharField(source='category.category_name')
     class Meta:
-        fields = ('id', 'amount', 'category')
+        fields = ('id', 'amount', 'category', 'date')
         model = SpendItem

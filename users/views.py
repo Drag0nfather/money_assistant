@@ -12,8 +12,14 @@ class UserViewSet(viewsets.ModelViewSet):
     def set_limit(self, request):
         data = request.data
         user_id = self.request.user.id
-        CustomUser.objects.filter(id=user_id).update(money=data['limit'])
-        return Response(data={'money update to': data['limit']}, status=status.HTTP_200_OK)
+        try:
+            CustomUser.objects.filter(id=user_id).update(money=data['limit'])
+            return Response({'money update to': data['limit']}, status=status.HTTP_200_OK)
+        except:
+            return Response(
+                {'status': 'Не передан лимит трат'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
     def me(self, request):
         query = CustomUser.objects.get(id=self.request.user.id)
@@ -23,5 +29,11 @@ class UserViewSet(viewsets.ModelViewSet):
     def set_payment_date(self, request):
         data = request.data
         user_id = self.request.user.id
-        CustomUser.objects.filter(id=user_id).update(payment_date=data['payment_date'])
-        return Response(data={'payment date changes': data['payment_date']}, status=status.HTTP_200_OK)
+        try:
+            CustomUser.objects.filter(id=user_id).update(payment_date=data['payment_date'])
+            return Response(data={'payment date changes': data['payment_date']}, status=status.HTTP_200_OK)
+        except:
+            return Response(
+                {'status': 'Не передана дата платежа'},
+                status=status.HTTP_404_NOT_FOUND
+            )

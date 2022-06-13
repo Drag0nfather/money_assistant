@@ -5,7 +5,7 @@ from rest_framework import viewsets, status
 
 from users.models import CustomUser
 from .models import Category, SpendItem
-from .serializers import CategorySerializer, SpendItemSerializer, DayAndMonthCategorySerializer
+from .serializers import CategorySerializer, SpendItemSerializer, DayCategorySerializer, MonthCategorySerializer
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -21,6 +21,21 @@ class CategoryViewSet(viewsets.ModelViewSet):
         data = request.data
         user_id = request.auth.payload['user_id']
         user_object = CustomUser.objects.get(id=user_id)
+        if not data.get('category_name') and not data.get('limit'):
+            return Response(
+                {'status': 'Не передана категория и лимит трат'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        elif not data.get('category_name'):
+            return Response(
+                {'status': 'Не передана категория'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        elif not data.get('limit'):
+            return Response(
+                {'status': 'Не передан лимит трат'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         similar_category = Category.objects.filter(
             category_name=data['category_name']).filter(
@@ -44,6 +59,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
             Category.objects.create(
                 category_name=data['category_name'],
                 limit=data['limit'],
+                fact_spend=0,
                 user=user_object
             )
             return Response(
@@ -55,9 +71,15 @@ class CategoryViewSet(viewsets.ModelViewSet):
         data = request.data
         user_id = self.request.user.id
         user_categories = Category.objects.filter(user=user_id)
-        category = user_categories.get(category_name=data['category_name'])
-        category.delete()
-        return Response({'Удалена категория': category.category_name}, status=status.HTTP_200_OK)
+        try:
+            category = user_categories.get(category_name=data['category_name'])
+            category.delete()
+            return Response({'Удалена категория': category.category_name}, status=status.HTTP_200_OK)
+        except:
+            return Response(
+                {'status': f'Категории {data["category_name"]} не существует'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
     def show_month_category_balance(self, request):
         data = request.data
@@ -66,10 +88,10 @@ class CategoryViewSet(viewsets.ModelViewSet):
         user_categories = Category.objects.filter(user=user_object)
         if data.get('category_name'):
             single_category = user_categories.get(category_name=data['category_name'])
-            serializer = DayAndMonthCategorySerializer(single_category)
+            serializer = MonthCategorySerializer(single_category)
             return Response(serializer.data, status=status.HTTP_200_OK)
         else:
-            serializer = DayAndMonthCategorySerializer(user_categories, many=True)
+            serializer = MonthCategorySerializer(user_categories, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
     def show_day_category_balance(self, request):
@@ -89,13 +111,13 @@ class CategoryViewSet(viewsets.ModelViewSet):
             single_category = user_categories.get(category_name=data['category_name'])
             day_balance = single_category.limit / days_delta
             single_category.limit = day_balance
-            serializer = DayAndMonthCategorySerializer(single_category)
+            serializer = DayCategorySerializer(single_category)
             return Response(serializer.data, status=status.HTTP_200_OK)
         else:
             for category in user_categories:
                 day_balance = category.limit / days_delta
                 category.limit = day_balance
-            serializer = DayAndMonthCategorySerializer(user_categories, many=True)
+            serializer = DayCategorySerializer(user_categories, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
 
@@ -107,16 +129,42 @@ class SpendItemViewSet(viewsets.ModelViewSet):
         data = request.data
         user_id = self.request.user.id
         user_object = CustomUser.objects.get(id=user_id)
-        category1 = Category.objects.filter(user=user_object).get(category_name=data['category'])
-        sum_spend = category1.fact_spend + data['cost']
-        category2 = Category.objects.filter(user=user_object).filter(category_name=data['category'])
-        category2.update(fact_spend=sum_spend)
-        SpendItem.objects.create(
-            amount=data['cost'],
-            category=category1
+
+        # Берем остаток в категории и прибавляем потраченное
+        category = Category.objects.filter(user=user_object).get(category_name=data['category'])
+        sum_spend = category.fact_spend + int(data['cost'])
+
+        # Обновляем поле остатка в категории
+        Category.objects.filter(
+            user=user_object).filter(
+            category_name=data['category']).update(
+            fact_spend=sum_spend
         )
+
+        # Уменьшаем сумму бюджета на количество потраченного
+        money = CustomUser.objects.get(id=user_id).money
+        new_money = money - int(data['cost'])
+        CustomUser.objects.filter(
+            id=user_id).update(
+            money=new_money
+        )
+
+        # Создание объекта траты
+        # TODO datetime.now выдает неправильное время
+        if not data.get('date'):
+            SpendItem.objects.create(
+                amount=data['cost'],
+                category=category,
+                date=datetime.now(),
+            )
+        else:
+            SpendItem.objects.create(
+                amount=data['cost'],
+                category=category,
+                date=data['date'],
+            )
         cost = data['cost']
-        return Response({f'Трата в категории {category1.category_name}': f'{cost} р.'})
+        return Response({f'Трата в категории {category.category_name}': f'{cost} р.'})
 
     def show_spend_items(self, request):
         data = request.data
@@ -125,7 +173,7 @@ class SpendItemViewSet(viewsets.ModelViewSet):
         if data.get('category'):
             spend_items = SpendItem.objects.filter(
                 category__user=user_object).filter(
-                category=data['category']
+                category__category_name=data['category']
             )
             serializer = SpendItemSerializer(spend_items, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
@@ -133,3 +181,29 @@ class SpendItemViewSet(viewsets.ModelViewSet):
             spend_items = SpendItem.objects.filter(category__user=user_object)
             serializer = SpendItemSerializer(spend_items, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def delete_spend_item(self, request):
+        data = request.data
+        user_id = self.request.user.id
+        user_spend_items = SpendItem.objects.filter(category__user=user_id)
+        try:
+            spend_item = user_spend_items.get(id=data['item_id'])
+
+            # Увеличиваем сумму бюджета на количество в удаленной трате
+            money = CustomUser.objects.get(id=user_id).money
+            new_money = money + spend_item.amount
+            CustomUser.objects.filter(
+                id=user_id).update(
+                money=new_money
+            )
+
+            spend_item.delete()
+            return Response(
+                {f'Удалено {spend_item.amount} р. в категории {spend_item.category.category_name}': 'ok'},
+                status=status.HTTP_200_OK
+            )
+        except:
+            return Response(
+                {f'Не найдено указанной траты': request.data},
+                status=status.HTTP_404_NOT_FOUND
+            )
