@@ -27,6 +27,7 @@ class SpendItem(models.Model):
         blank=False
     )
     category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='Категория')
+    date = models.DateTimeField()
 
     def __str__(self):
         return f'Трата {self.amount} р. в категории {self.category}'
