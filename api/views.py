@@ -177,6 +177,10 @@ class SpendItemViewSet(viewsets.ModelViewSet):
             )
             serializer = SpendItemSerializer(spend_items, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
+        elif data.get('item_id'):
+            spend_item = SpendItem.objects.get(id=data['item_id'])
+            serializer = SpendItemSerializer(spend_item)
+            return Response(serializer.data, status=status.HTTP_200_OK)
         else:
             spend_items = SpendItem.objects.filter(category__user=user_object)
             serializer = SpendItemSerializer(spend_items, many=True)
@@ -207,3 +211,35 @@ class SpendItemViewSet(viewsets.ModelViewSet):
                 {f'Не найдено указанной траты': request.data},
                 status=status.HTTP_404_NOT_FOUND
             )
+
+    def change_spend_item(self, request):
+        data = request.data
+        user_id = self.request.user.id
+        user_object = CustomUser.objects.get(id=user_id)
+        spend_item_query = SpendItem.objects.filter(id=data['item_id'])
+        spend_item_obj = SpendItem.objects.get(id=data['item_id'])
+        if data.get('amount'):
+            # Обновляем сумму бюджета на количество в измененной трате
+            money = CustomUser.objects.get(id=user_id).money
+            new_money = money - spend_item_obj.amount + int(data['amount'])
+            CustomUser.objects.filter(
+                id=user_id).update(
+                money=new_money
+            )
+            # Обновляем поле количества
+            spend_item_query.update(amount=data['amount'])
+            return Response(
+                {f'Трата {spend_item_obj.id} изменена': f'{data["amount"]} р.'},
+                status=status.HTTP_200_OK
+            )
+        if data.get('category'):
+            # Обновляем поле количества
+            try:
+                category_to_update = Category.objects.get(category_name=data['category'])
+            except:
+                return Response(
+                    {'Не найдена категория': data['category']},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            spend_item_query.update(amount=data['amount'])
+            # TODO доделать
