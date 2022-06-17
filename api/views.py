@@ -131,8 +131,20 @@ class SpendItemViewSet(viewsets.ModelViewSet):
         user_object = CustomUser.objects.get(id=user_id)
 
         # Берем остаток в категории и прибавляем потраченное
-        category = Category.objects.filter(user=user_object).get(category_name=data['category'])
-        sum_spend = category.fact_spend + int(data['cost'])
+        try:
+            category = Category.objects.filter(user=user_object).get(category_name=data.get('category'))
+        except:
+            return Response(
+                {'Передана неверная категория': data.get('category')},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        try:
+            sum_spend = category.fact_spend + int(data.get('cost'))
+        except:
+            return Response(
+                {'error': 'Не передано количество'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
         # Обновляем поле остатка в категории
         Category.objects.filter(
@@ -173,12 +185,23 @@ class SpendItemViewSet(viewsets.ModelViewSet):
         if data.get('category'):
             spend_items = SpendItem.objects.filter(
                 category__user=user_object).filter(
-                category__category_name=data['category']
+                category__category_name=data.get('category')
             )
+            if len(spend_items) == 0:
+                return Response(
+                    {'Не найдено трат в указанной категории, либо категория неверна': data.get('category')},
+                    status=status.HTTP_404_NOT_FOUND
+                )
             serializer = SpendItemSerializer(spend_items, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
         elif data.get('item_id'):
-            spend_item = SpendItem.objects.get(id=data['item_id'])
+            try:
+                spend_item = SpendItem.objects.get(id=data.get('item_id'))
+            except:
+                return Response(
+                    {'Не найдено указанной траты': data.get('item_id')},
+                    status=status.HTTP_404_NOT_FOUND
+                )
             serializer = SpendItemSerializer(spend_item)
             return Response(serializer.data, status=status.HTTP_200_OK)
         else:
@@ -216,8 +239,14 @@ class SpendItemViewSet(viewsets.ModelViewSet):
         data = request.data
         user_id = self.request.user.id
         user_object = CustomUser.objects.get(id=user_id)
-        spend_item_query = SpendItem.objects.filter(id=data['item_id'])
-        spend_item_obj = SpendItem.objects.get(id=data['item_id'])
+        try:
+            spend_item_query = SpendItem.objects.filter(id=data.get('item_id'))
+            spend_item_obj = SpendItem.objects.get(id=data.get('item_id'))
+        except:
+            return Response(
+                {'Не найдена трата': data.get('item_id')},
+                status=status.HTTP_404_NOT_FOUND
+            )
         if data.get('amount'):
             # Обновляем сумму бюджета на количество в измененной трате
             money = CustomUser.objects.get(id=user_id).money
@@ -226,20 +255,43 @@ class SpendItemViewSet(viewsets.ModelViewSet):
                 id=user_id).update(
                 money=new_money
             )
+            # Обновляем количество фактически потраченного в категории
+            spend_item_category = spend_item_obj.category.category_name
+            category_money = Category.objects.filter(user=user_object).get(category_name=spend_item_category).fact_spend
+            new_money = category_money - spend_item_obj.amount + category_money
+            Category.objects.filter(category_name=spend_item_category).update(fact_spend=new_money)
             # Обновляем поле количества
             spend_item_query.update(amount=data['amount'])
             return Response(
                 {f'Трата {spend_item_obj.id} изменена': f'{data["amount"]} р.'},
                 status=status.HTTP_200_OK
             )
-        if data.get('category'):
-            # Обновляем поле количества
+        elif data.get('category'):
+            # Уменьшаем количество потраченного в старой категории
+            old_category = spend_item_obj.category.category_name
+            old_category_money = Category.objects.filter(user=user_object).get(category_name=old_category).fact_spend
+            new_category_money = old_category_money - spend_item_obj.amount
+            Category.objects.filter(user=user_object).filter(category_name=old_category).update(fact_spend=new_category_money)
+
+            # Увеличиваем количество потраченного в новой категории
             try:
-                category_to_update = Category.objects.get(category_name=data['category'])
+                new_category = data.get('category')
+                old_category_money = Category.objects.filter(user=user_object).get(category_name=new_category).fact_spend
+                new_category_money = old_category_money + spend_item_obj.amount
+                Category.objects.filter(user=user_object).filter(category_name=new_category).update(fact_spend=new_category_money)
             except:
+                # Если не найдена категория - возвращаем баланс старой категории
+                old_category_money = Category.objects.filter(user=user_object).get(category_name=old_category).fact_spend
+                new_category_money = old_category_money - spend_item_obj.amount
+                Category.objects.filter(user=user_object).filter(category_name=old_category).update(fact_spend=new_category_money)
                 return Response(
-                    {'Не найдена категория': data['category']},
+                    {'Не найдена указанная категория': data.get('category')},
                     status=status.HTTP_404_NOT_FOUND
                 )
-            spend_item_query.update(amount=data['amount'])
-            # TODO доделать
+            # Присваиваем трате новую категорию
+            try:
+                new_category = Category.objects.filter(user_id=user_id).get(category_name=data.get('category'))
+            except:
+                return Response({'Не найдена категория': data.get('category')}, status=status.HTTP_404_NOT_FOUND)
+            spend_item_query.update(category=new_category.id)
+            return Response({f'Трате {spend_item_obj.id} присвоена новая категория': data.get('category')}, status=status.HTTP_200_OK)
