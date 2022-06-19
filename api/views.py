@@ -213,6 +213,7 @@ class SpendItemViewSet(viewsets.ModelViewSet):
         data = request.data
         user_id = self.request.user.id
         user_spend_items = SpendItem.objects.filter(category__user=user_id)
+        user_object = CustomUser.objects.get(id=user_id)
         try:
             spend_item = user_spend_items.get(id=data['item_id'])
 
@@ -223,7 +224,12 @@ class SpendItemViewSet(viewsets.ModelViewSet):
                 id=user_id).update(
                 money=new_money
             )
-
+            # Уменьшаем фактически потраченное в категории
+            spend_item_category = spend_item.category.category_name
+            category_money = Category.objects.filter(user=user_object).get(category_name=spend_item_category).fact_spend
+            new_money = category_money - spend_item.amount
+            Category.objects.filter(category_name=spend_item_category).update(fact_spend=new_money)
+            # Удаляем объект траты
             spend_item.delete()
             return Response(
                 {f'Удалено {spend_item.amount} р. в категории {spend_item.category.category_name}': 'ok'},
