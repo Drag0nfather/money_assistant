@@ -301,3 +301,15 @@ class SpendItemViewSet(viewsets.ModelViewSet):
                 return Response({'Не найдена категория': data.get('category')}, status=status.HTTP_404_NOT_FOUND)
             spend_item_query.update(category=new_category.id)
             return Response({f'Трате {spend_item_obj.id} присвоена новая категория': data.get('category')}, status=status.HTTP_200_OK)
+        elif data['date']:
+            if data['date'] == 'nothing':
+                now = datetime.now().strftime('%Y-%m-%d %H:%M')
+                spend_item_query.update(date=now)
+                return Response({f'Изменена дата у категории {spend_item_obj.id}': now}, status=status.HTTP_200_OK)
+
+            elif type(datetime.strptime(data['date'], '%Y-%m-%d %H:%M')) == datetime:
+                spend_item_query.update(date=data.get('date'))
+                return Response({f'Изменена дата у категории {spend_item_obj.id}': data.get('date')},
+                                status=status.HTTP_200_OK)
+            else:
+                return Response({'error': 'передано время в неверном формате'}, status=status.HTTP_404_NOT_FOUND)
