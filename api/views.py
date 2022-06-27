@@ -1,5 +1,6 @@
 from datetime import date, datetime
 
+from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework import viewsets, status
 
@@ -81,6 +82,12 @@ class CategoryViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+    def show_day_balance(self, request):
+        user_id = request.user.id
+        update_day_balance(user_id)
+        day_balance = CustomUser.objects.get(id=self.request.user.id).day_balance
+        return Response({'остаток на день': f'{day_balance} р.'}, status=status.HTTP_200_OK)
+
     def show_month_category_balance(self, request):
         data = request.data
         user_id = self.request.user.id
@@ -106,7 +113,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
             month=user_payment_day.month,
             day=user_payment_day.day
         )
-        days_delta = (user_payment_day_in_datetime - today).days
+        days_delta = (user_payment_day_in_datetime - today).days + 1
         if data.get('category_name'):
             single_category = user_categories.get(category_name=data['category_name'])
             day_balance = single_category.limit / days_delta
@@ -116,7 +123,23 @@ class CategoryViewSet(viewsets.ModelViewSet):
         else:
             for category in user_categories:
                 day_balance = category.limit / days_delta
-                category.limit = day_balance
+                today_min = datetime.combine(datetime.today().date(), datetime.today().time().min)
+                today_max = datetime.combine(datetime.today().date(), datetime.today().time().max)
+                today_spend_items = SpendItem.objects.filter(
+                    category__user=user_id).filter(
+                    category=category).filter(
+                    date__range=(
+                        today_min,
+                        today_max
+                    ))
+                sum_spend = 0
+                for spend_item in today_spend_items:
+                    sum_spend += spend_item.amount
+                limit = day_balance - sum_spend
+                if limit < 0:
+                    category.limit = 0
+                else:
+                    category.limit = day_balance - sum_spend
             serializer = DayCategorySerializer(user_categories, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -186,7 +209,7 @@ class SpendItemViewSet(viewsets.ModelViewSet):
             spend_items = SpendItem.objects.filter(
                 category__user=user_object).filter(
                 category__category_name=data.get('category')
-            )
+            ).order_by('-id')
             if len(spend_items) == 0:
                 return Response(
                     {'Не найдено трат в указанной категории, либо категория неверна': data.get('category')},
@@ -205,7 +228,7 @@ class SpendItemViewSet(viewsets.ModelViewSet):
             serializer = SpendItemSerializer(spend_item)
             return Response(serializer.data, status=status.HTTP_200_OK)
         else:
-            spend_items = SpendItem.objects.filter(category__user=user_object)
+            spend_items = SpendItem.objects.filter(category__user=user_object).order_by('-id')
             serializer = SpendItemSerializer(spend_items, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -313,3 +336,25 @@ class SpendItemViewSet(viewsets.ModelViewSet):
                                 status=status.HTTP_200_OK)
             else:
                 return Response({'error': 'передано время в неверном формате'}, status=status.HTTP_404_NOT_FOUND)
+
+
+def update_day_balance(user_id):
+    user_object = CustomUser.objects.get(id=user_id)
+    user_money = user_object.period_begin_money
+    today = datetime.now()
+    user_payment_day = user_object.payment_date
+    user_payment_day_in_datetime = datetime(
+        year=user_payment_day.year,
+        month=user_payment_day.month,
+        day=user_payment_day.day
+    )
+    days_delta = (user_payment_day_in_datetime - today).days + 1
+    money_remainder = round(user_money / days_delta, 2)
+    today_min = datetime.combine(datetime.today().date(), datetime.today().time().min)
+    today_max = datetime.combine(datetime.today().date(), datetime.today().time().max)
+    today_spend_items = SpendItem.objects.filter(category__user=user_id).filter(date__range=(today_min, today_max))
+    sum_spend = 0
+    for spend_item in today_spend_items:
+        sum_spend += spend_item.amount
+    new_money = money_remainder - sum_spend
+    CustomUser.objects.filter(id=user_id).update(day_balance=new_money)
