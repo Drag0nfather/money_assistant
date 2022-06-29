@@ -1,6 +1,5 @@
-from datetime import date, datetime
+from datetime import datetime
 
-from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework import viewsets, status
 
@@ -74,13 +73,61 @@ class CategoryViewSet(viewsets.ModelViewSet):
         user_categories = Category.objects.filter(user=user_id)
         try:
             category = user_categories.get(category_name=data['category_name'])
-            category.delete()
-            return Response({'Удалена категория': category.category_name}, status=status.HTTP_200_OK)
         except:
             return Response(
                 {'status': f'Категории {data["category_name"]} не существует'},
                 status=status.HTTP_404_NOT_FOUND
             )
+        all_spend_items = SpendItem.objects.filter(category_id=category.id)
+        if data.get('is_return'):
+            if data['is_return'] == 'all_period':
+                sum_spend = 0
+                for spend_item in all_spend_items:
+                    sum_spend += spend_item.amount
+                    spend_item.delete()
+                    spend_item.save()
+                money = CustomUser.objects.get(id=user_id).money
+                period_begin_money = CustomUser.objects.get(id=user_id).period_begin_money
+                new_money = money + sum_spend
+                new_period_begin_money = period_begin_money + sum_spend
+                CustomUser.objects.filter(id=user_id).update(money=new_money)
+                CustomUser.objects.filter(id=user_id).update(period_begin_money=new_period_begin_money)
+                category.delete()
+                return Response(
+                    {
+                        'Все объекты трат в этой категории удалены, на баланс возвращено:':
+                            f'{sum_spend} р.'
+                    },
+                    status=status.HTTP_200_OK
+                )
+            elif data['is_return'] == 'custom':
+                start_date = data.get('date_start')
+                end_date = data.get('date_end')
+                all_spend_items.filter(date__range=[start_date, end_date])
+                sum_spend = 0
+                for spend_item in all_spend_items:
+                    sum_spend += spend_item.amount
+                    spend_item.delete()
+                    spend_item.save()
+                money = CustomUser.objects.get(id=user_id).money
+                period_begin_money = CustomUser.objects.get(id=user_id).period_begin_money
+                new_money = money + sum_spend
+                new_period_begin_money = period_begin_money + sum_spend
+                CustomUser.objects.filter(id=user_id).update(money=new_money)
+                CustomUser.objects.filter(id=user_id).update(period_begin_money=new_period_begin_money)
+                category.delete()
+                return Response(
+                    {
+                        'Все объекты трат в этой категории удалены, на баланс возвращено:':
+                            f'{sum_spend} р.'
+                    },
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response({'error': 'Передан неверный период для удаления'}, status=status.HTTP_404_NOT_FOUND)
+        category.delete()
+        return Response({'Удалена категория': category.category_name}, status=status.HTTP_200_OK)
+
 
     def show_day_balance(self, request):
         user_id = request.user.id
@@ -115,9 +162,32 @@ class CategoryViewSet(viewsets.ModelViewSet):
         )
         days_delta = (user_payment_day_in_datetime - today).days + 1
         if data.get('category_name'):
-            single_category = user_categories.get(category_name=data['category_name'])
+            try:
+                single_category = user_categories.get(category_name=data['category_name'])
+            except:
+                return Response(
+                    {'Не найдено категории':
+                         data.get('category_name')
+                     },
+                    status=status.HTTP_400_BAD_REQUEST)
             day_balance = single_category.limit / days_delta
-            single_category.limit = day_balance
+            today_min = datetime.combine(datetime.today().date(), datetime.today().time().min)
+            today_max = datetime.combine(datetime.today().date(), datetime.today().time().max)
+            today_spend_items = SpendItem.objects.filter(
+                category__user=user_id).filter(
+                category=single_category).filter(
+                date__range=(
+                    today_min,
+                    today_max
+                ))
+            sum_spend = 0
+            for spend_item in today_spend_items:
+                sum_spend += spend_item.amount
+            limit = day_balance - sum_spend
+            if limit < 0:
+                single_category.limit = 0
+            else:
+                single_category.limit = day_balance - sum_spend
             serializer = DayCategorySerializer(single_category)
             return Response(serializer.data, status=status.HTTP_200_OK)
         else:
@@ -185,12 +255,12 @@ class SpendItemViewSet(viewsets.ModelViewSet):
         )
 
         # Создание объекта траты
-        # TODO datetime.now выдает неправильное время
+        date_today = datetime.now()
         if not data.get('date'):
             SpendItem.objects.create(
                 amount=data['cost'],
                 category=category,
-                date=datetime.now(),
+                date=date_today,
             )
         else:
             SpendItem.objects.create(
