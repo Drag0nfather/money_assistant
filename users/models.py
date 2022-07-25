@@ -22,7 +22,10 @@ class CustomUser(AbstractUser):
     money = models.IntegerField(
         null=True,
     )
-    payment_date = models.DateField(
+    start_date = models.DateField(
+        null=True,
+    )
+    end_date = models.DateField(
         null=True,
     )
     day_balance = models.DecimalField(

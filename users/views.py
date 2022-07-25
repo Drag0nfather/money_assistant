@@ -24,8 +24,28 @@ class UserViewSet(viewsets.ModelViewSet):
                 {'status': 'Не передан лимит трат'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        update_user_day_balance(user_id)
-        return Response({'money update to': data['limit']}, status=status.HTTP_200_OK)
+        if data.get('start_date'):
+            if type(datetime.strptime(data['date'], '%Y-%m-%d %H:%M')) == datetime:
+                CustomUser.objects.filter(id=user_id).update(start_date=data['start_date'])
+                update_user_day_balance(user_id)
+                return Response(
+                    {
+                        'money update to': data['limit'],
+                        'start_date': data['start_date']
+                    }
+                    , status=status.HTTP_200_OK)
+            else:
+                return Response({'error': 'передано время в неверном формате'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            now = datetime.now().strftime('%Y-%m-%d')
+            CustomUser.objects.filter(id=user_id).update(start_date=now)
+            update_user_day_balance(user_id)
+            return Response(
+                {
+                    'money update to': data['limit'],
+                    'start_date': now
+                }
+                , status=status.HTTP_200_OK)
 
     def me(self, request):
         update_day_balance(self.request.user.id)
@@ -37,7 +57,7 @@ class UserViewSet(viewsets.ModelViewSet):
         data = request.data
         user_id = self.request.user.id
         try:
-            CustomUser.objects.filter(id=user_id).update(payment_date=data['payment_date'])
+            CustomUser.objects.filter(id=user_id).update(end_date=data['payment_date'])
         except:
             return Response(
                 {'status': 'Не передана дата платежа'},
@@ -52,7 +72,7 @@ def update_user_day_balance(user_id):
     user_object = CustomUser.objects.get(id=user_id)
     user_money = user_object.money
     today = datetime.now()
-    user_payment_day = user_object.payment_date
+    user_payment_day = user_object.end_date
     user_payment_day_in_datetime = datetime(
         year=user_payment_day.year,
         month=user_payment_day.month,

@@ -87,11 +87,11 @@ class CategoryViewSet(viewsets.ModelViewSet):
                     spend_item.delete()
                     spend_item.save()
                 money = CustomUser.objects.get(id=user_id).money
-                period_begin_money = CustomUser.objects.get(id=user_id).period_begin_money
+                # period_begin_money = CustomUser.objects.get(id=user_id).period_begin_money
                 new_money = money + sum_spend
-                new_period_begin_money = period_begin_money + sum_spend
+                # new_period_begin_money = period_begin_money + sum_spend
                 CustomUser.objects.filter(id=user_id).update(money=new_money)
-                CustomUser.objects.filter(id=user_id).update(period_begin_money=new_period_begin_money)
+                # CustomUser.objects.filter(id=user_id).update(period_begin_money=new_period_begin_money)
                 category.delete()
                 return Response(
                     {
@@ -154,7 +154,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
         user_object = CustomUser.objects.get(id=user_id)
         user_categories = Category.objects.filter(user=user_object)
         today = datetime.now()
-        user_payment_day = user_object.payment_date
+        user_payment_day = user_object.end_date
         user_payment_day_in_datetime = datetime(
             year=user_payment_day.year,
             month=user_payment_day.month,
@@ -349,7 +349,7 @@ class SpendItemViewSet(viewsets.ModelViewSet):
         if data.get('amount'):
             # Обновляем сумму бюджета на количество в измененной трате
             money = CustomUser.objects.get(id=user_id).money
-            new_money = money - spend_item_obj.amount + int(data['amount'])
+            new_money = money + spend_item_obj.amount - int(data['amount'])
             CustomUser.objects.filter(
                 id=user_id).update(
                 money=new_money
@@ -357,7 +357,7 @@ class SpendItemViewSet(viewsets.ModelViewSet):
             # Обновляем количество фактически потраченного в категории
             spend_item_category = spend_item_obj.category.category_name
             category_money = Category.objects.filter(user=user_object).get(category_name=spend_item_category).fact_spend
-            new_money = category_money - spend_item_obj.amount + category_money
+            new_money = category_money - spend_item_obj.amount + int(data['amount'])
             Category.objects.filter(category_name=spend_item_category).update(fact_spend=new_money)
             # Обновляем поле количества
             spend_item_query.update(amount=data['amount'])
@@ -411,20 +411,44 @@ class SpendItemViewSet(viewsets.ModelViewSet):
 def update_day_balance(user_id):
     user_object = CustomUser.objects.get(id=user_id)
     user_money = user_object.period_begin_money
-    today = datetime.now()
-    user_payment_day = user_object.payment_date
+    start_date = user_object.start_date
+    # TODO берем сумму всех трат до сегодня
+    start_date_in_datetime = datetime(
+        year=start_date.year,
+        month=start_date.month,
+        day=start_date.day
+    )
+    today = datetime.today()
+
+    yesterday = datetime(
+        year=today.year,
+        month=today.month,
+        day=today.day - 1,
+        hour=23,
+        minute=59,
+        second=59,
+        microsecond=59
+    )
+    period_spend_items = SpendItem.objects.filter(
+        category__user=user_id).filter(date__range=(start_date_in_datetime, yesterday))
+    sum_spend = sum([item.amount for item in period_spend_items])
+    # TODO вычитаем из запасов траты до сегодня
+    spend_items_to_yesterday = user_money - sum_spend
+    # TODO делим эту сумму на все дни
+    user_payment_day = user_object.end_date
     user_payment_day_in_datetime = datetime(
         year=user_payment_day.year,
         month=user_payment_day.month,
         day=user_payment_day.day
     )
-    days_delta = (user_payment_day_in_datetime - today).days + 1
-    money_remainder = round(user_money / days_delta, 2)
+    days_delta = (user_payment_day_in_datetime - start_date_in_datetime).days + 1
+
+    money_remainder = spend_items_to_yesterday / days_delta
+    # TODO Далее вычесть траты, которые были сделаны сегодня
     today_min = datetime.combine(datetime.today().date(), datetime.today().time().min)
     today_max = datetime.combine(datetime.today().date(), datetime.today().time().max)
     today_spend_items = SpendItem.objects.filter(category__user=user_id).filter(date__range=(today_min, today_max))
-    sum_spend = 0
-    for spend_item in today_spend_items:
-        sum_spend += spend_item.amount
-    new_money = money_remainder - sum_spend
+    today_spend = sum([item.amount for item in today_spend_items])
+
+    new_money = money_remainder - today_spend
     CustomUser.objects.filter(id=user_id).update(day_balance=new_money)
